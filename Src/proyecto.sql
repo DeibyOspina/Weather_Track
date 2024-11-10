@@ -72,4 +72,4 @@ CREATE TABLE sensor_tipo_sensor (
     tipo_sensor_id INT REFERENCES tipo_sensores(tipo_sensor_id),
     PRIMARY KEY (sensor_id, tipo_sensor_id)
 );
-}
+
