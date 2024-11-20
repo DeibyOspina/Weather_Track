@@ -80,6 +80,7 @@ CREATE TABLE sensor_tipo_sensor (
     PRIMARY KEY (sensor_id, tipo_sensor_id)
 );
 
+
 --- Carga Masiva De Archivos 
 
 --- Carga Datos Tabla Ciudades
@@ -100,4 +101,99 @@ COPY sensores FROM(Sensor_id, nombre_sensor, ciudad_id) 'Resources/sensores.csv'
 --- Carga Datos Tabla Sensor_tipo_sensor
 COPY sensor_tipo_sensor(sensor_id, tipo_sensor_id) FROM 'Resources/sensor_tipo_sensor.csv' DELIMITER ',' CSV HEADER;
 
+
+--- Autorizaciones 
+
+
 --- Escenarios de análisis / (Funciones - Triggers - Consultas - Subconsultas)
+
+
+---
+
+
+
+---
+
+
+
+---
+
+
+
+--- Evolución de la dirección del viento en una ciudad específica
+
+CREATE OR REPLACE FUNCTION evolucion_direccion_viento(ciudad_nombre TEXT)
+RETURNS TABLE(fecha DATE, direccion NUMERIC) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT i.tiempo_lectura, i.direccion_viento
+    FROM informacion_sensores i
+    JOIN sensores s ON i.sensor_id = s.sensor_id
+    JOIN ciudades c ON s.ciudad_id = c.ciudad_id
+    WHERE c.nombre_ciudad = ciudad_nombre
+    ORDER BY i.tiempo_lectura;
+END;
+$$ LANGUAGE plpgsql;
+
+    --- Visualizar
+SELECT * FROM evolucion_direccion_viento(''); /* Escribir el nombre de la ciudad */
+
+
+--- Alertas generadas por cada tipo de sensor 
+
+CREATE OR REPLACE FUNCTION alertas_por_tipo_sensor()
+RETURNS TABLE(tipo_sensor TEXT, total_alertas INT) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT ts.nombre_tipo_sensor, COUNT(*)
+    FROM informacion_sensores i
+    JOIN sensores s ON i.sensor_id = s.sensor_id
+    JOIN sensor_tipo_sensor st ON s.sensor_id = st.sensor_id
+    JOIN tipos_de_sensores ts ON st.tipo_sensor_id = ts.tipo_sensor_id
+    WHERE i.temperatura > 35 -- Por ejemplo, alerta de alta temperatura
+    GROUP BY ts.nombre_tipo_sensor
+    ORDER BY total_alertas DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION trigger_nueva_alerta()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.temperatura > 35 THEN
+        RAISE NOTICE 'Nueva alerta generada por alta temperatura: Sensor %', NEW.sensor_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER alerta_alta_temperatura
+AFTER INSERT ON informacion_sensores
+FOR EACH ROW
+EXECUTE FUNCTION trigger_nueva_alerta();
+
+--- Días con viento más fuerte en cada mes
+
+CREATE OR REPLACE FUNCTION dias_viento_fuerte()
+RETURNS TABLE(ciudad TEXT, mes INT, dia DATE, max_velocidad NUMERIC) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT c.nombre_ciudad, EXTRACT(MONTH FROM i.tiempo_lectura) AS mes, i.tiempo_lectura AS dia, MAX(i.velocidad_viento)
+    FROM informacion_sensores i
+    JOIN sensores s ON i.sensor_id = s.sensor_id
+    JOIN ciudades c ON s.ciudad_id = c.ciudad_id
+    GROUP BY c.nombre_ciudad, mes, dia
+    ORDER BY c.nombre_ciudad, mes, max_velocidad DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+    --- Visualizar
+SELECT * FROM dias_viento_fuerte();
+
+--- Máximos y mínimos históricos de temperatura por ciudad
+
+
+
+--- Promedio mensual de precipitaciones por ciudad
+
+
+ 
