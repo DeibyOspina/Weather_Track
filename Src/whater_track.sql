@@ -19,7 +19,7 @@ CREATE TABLE usuarios (
     rol_id INT REFERENCES rol_usuario(rol_id)
 );
 
--- Tabla de ciudades 
+-- Tabla de ciudades
 CREATE TABLE ciudades (
     ciudad_id SERIAL PRIMARY KEY,
     nombre_ciudad VARCHAR(100) NOT NULL,
@@ -29,6 +29,7 @@ CREATE TABLE ciudades (
     elevacion DECIMAL(9, 6)
 );
 
+
 -- Tabla de tipos de sensores
 CREATE TABLE tipo_sensores (
     tipo_sensor_id SERIAL PRIMARY KEY,
@@ -37,16 +38,16 @@ CREATE TABLE tipo_sensores (
 
 -- Tabla de sensores
 CREATE TABLE sensores (
-    sensor_id SERIAL PRIMARY KEY,
+    sensor_id VARCHAR(50) PRIMARY KEY,
     nombre_sensor VARCHAR(100) NOT NULL,
     tipo_sensor_id INT REFERENCES tipo_sensores(tipo_sensor_id),
     ciudad_id INT REFERENCES ciudades(ciudad_id)
 );
 
--- Tabla de informacion de sensores
+-- Tabla de información de sensores
 CREATE TABLE informacion_sensores (
     info_sensor_id SERIAL PRIMARY KEY,
-    sensor_id INT REFERENCES sensores(sensor_id),
+    sensor_id VARCHAR(50) REFERENCES sensores(sensor_id),
     temperatura DECIMAL(5, 2),
     velocidad_viento DECIMAL(5, 2),
     precipitacion DECIMAL(5, 2),  
@@ -54,15 +55,13 @@ CREATE TABLE informacion_sensores (
     tiempo_lectura DATE DEFAULT CURRENT_DATE
 );
 
-
 -- Tabla de alertas
 CREATE TABLE alertas (
     alerta_id SERIAL PRIMARY KEY,
-    sensor_id INT REFERENCES sensores(sensor_id),
+    sensor_id VARCHAR(50) REFERENCES sensores(sensor_id),
     mensaje_alerta VARCHAR(255),
     tiempo_alerta DATE DEFAULT CURRENT_DATE
 );
-
 
 -- Tabla de relaciones entre información y alertas
 CREATE TABLE genera (
@@ -72,34 +71,30 @@ CREATE TABLE genera (
     fecha DATE DEFAULT CURRENT_DATE
 );
 
---- Tabla de relaciones entre tipos de sensor y sensores
-
+-- Tabla de relaciones entre tipos de sensor y sensores
 CREATE TABLE sensor_tipo_sensor (
-    sensor_id INT REFERENCES sensores(sensor_id),
+    sensor_id VARCHAR(50) REFERENCES sensores(sensor_id),
     tipo_sensor_id INT REFERENCES tipo_sensores(tipo_sensor_id),
     PRIMARY KEY (sensor_id, tipo_sensor_id)
 );
 
-
 --- Carga Masiva De Archivos 
 
 --- Carga Datos Tabla Ciudades
-COPY ciudades(ciudad_id, nombre_ciudad, pais, latitud, longitud, elevacion) FROM 'Resources/ciudades.csv' DELIMITER ',' CSV HEADER;
+COPY ciudades(ciudad_id, nombre_ciudad, pais, latitud, longitud, elevacion) FROM 'C:/temp/ciudades.csv' DELIMITER ';' CSV HEADER;
+
+--- Carga Datos Tabla Sensores
+COPY sensores (Sensor_id, nombre_sensor, ciudad_id) FROM 'C:/temp/sensores.csv' DELIMITER ';' CSV HEADER;
 
 --- Carga Datos Tabla Informacion_sensores
 COPY informacion_sensores(sensor_id, temperatura, velocidad_viento, precipitacion, direccion_viento, tiempo_lectura) 
-FROM 'Resources/informacion_sensores.csv' DELIMITER ',' CSV HEADER;
+FROM 'C:/temp/informacion_sensores.csv' DELIMITER ';' CSV HEADER;
 
 --- Carga Datos Tabla Tipo_de_sensores
-COPY tipo_sensores(tipo_sensor_id, tipo_sensor) FROM 'Resources/tipos_de_sensores.csv' DELIMITER ',' CSV HEADER;
-
-
---- Carga Datos Tabla Sensores
-COPY sensores FROM(Sensor_id, nombre_sensor, ciudad_id) 'Resources/sensores.csv' DELIMITER ',' CSV HEADER;
-
+COPY tipo_sensores(tipo_sensor_id, tipo_sensor) FROM 'C:/temp/tipos_de_sensores.csv' DELIMITER ';' CSV HEADER;
 
 --- Carga Datos Tabla Sensor_tipo_sensor
-COPY sensor_tipo_sensor(sensor_id, tipo_sensor_id) FROM 'Resources/sensor_tipo_sensor.csv' DELIMITER ',' CSV HEADER;
+COPY sensor_tipo_sensor(sensor_id, tipo_sensor_id) FROM 'C:/temp/sensor_tipo_sensor.csv' DELIMITER ';' CSV HEADER;
 
 
 --- Autorizaciones 
