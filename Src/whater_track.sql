@@ -388,3 +388,87 @@ FROM alertas a
 JOIN sensores s ON a.sensor_id = s.sensor_id
 JOIN ciudades c ON s.ciudad_id = c.ciudad_id
 GROUP BY c.nombre_ciudad;
+
+
+
+
+
+-- Opciones para los escenarios del proyecto realizados de otra manera:
+
+-- 1. Tendencia de temperatura promedio anual:
+
+SELECT EXTRACT(YEAR FROM tiempo_lectura) AS año, AVG(temperatura) AS temp_promedio,
+       STDDEV(temperatura) AS desviacion_estandar
+FROM informacion_sensores
+GROUP BY año
+ORDER BY año;
+
+-- 2. Alertas de alta temperatura en una ciudad específica:
+
+
+SELECT c.nombre_ciudad, COUNT(*) AS total_alertas_altas
+FROM alertas a
+JOIN sensores s ON a.sensor_id = s.sensor_id
+JOIN ciudades c ON s.ciudad_id = c.ciudad_id
+WHERE a.mensaje_alerta LIKE '%alta temperatura%' AND c.nombre_ciudad = 'Ciudad Ejemplo'
+GROUP BY c.nombre_ciudad;
+
+-- 3. Ciudades con la mayor precipitación promedio anual:
+
+SELECT c.nombre_ciudad, AVG(i.precipitacion) AS precipitacion_promedio
+FROM ciudades c
+JOIN sensores s ON c.ciudad_id = s.ciudad_id
+JOIN informacion_sensores i ON s.sensor_id = i.sensor_id
+GROUP BY c.nombre_ciudad
+ORDER BY precipitacion_promedio DESC
+LIMIT 10;
+
+
+-- 4. Evolución de la dirección del viento en una ciudad específica:
+
+
+SELECT tiempo_lectura, direccion_viento
+FROM informacion_sensores i_s
+INNER JOIN ciudades c ON i_s.info_sensor_id = c.ciudad_id
+WHERE ciudad_id = (SELECT ciudad_id FROM ciudades WHERE nombre_ciudad = 'Ciudad Ejemplo')
+ORDER BY tiempo_lectura;
+
+
+-- 5. Alertas generadas por cada tipo de sensor:
+
+CREATE OR REPLACE FUNCTION obtener_alertas_por_tipo_sensor()
+RETURNS TRIGGER AS $$
+BEGIN
+  
+  UPDATE tipo_sensores ts
+  SET total_alertas = (SELECT COUNT(*) 
+                       FROM alertas a
+                       JOIN sensores s ON a.sensor_id = s.sensor_id
+                       WHERE s.tipo_sensor_id = ts.tipo_sensor_id);
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE TRIGGER actualizar_estadisticas_alertas
+AFTER INSERT ON alertas
+FOR EACH ROW
+EXECUTE PROCEDURE obtener_alertas_por_tipo_sensor();
+
+
+-- 6. Días con viento más fuerte en cada mes:
+
+WITH maximos_vientos AS (
+    SELECT ciudad_id, EXTRACT(MONTH FROM tiempo_lectura) AS mes, MAX(velocidad_viento) AS max_viento
+    FROM informacion_sensores i_s
+	INNER JOIN ciudades c ON i_s.info_sensor_id = c.ciudad_id
+    GROUP BY ciudad_id, mes
+)
+SELECT c.nombre_ciudad, m.mes, m.max_viento
+FROM maximos_vientos m
+INNER JOIN ciudades c ON m.ciudad_id = c.ciudad_id;
+
+
+
+
