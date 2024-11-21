@@ -97,11 +97,6 @@ COPY tipo_sensores(tipo_sensor_id, tipo_sensor) FROM 'C:/temp/tipos_de_sensores.
 --- Carga Datos Tabla Sensor_tipo_sensor
 COPY sensor_tipo_sensor(sensor_id, tipo_sensor_id) FROM 'C:/temp/sensor_tipo_sensor.csv' DELIMITER ';' CSV HEADER;
 
-
-DROP FUNCTION IF EXISTS generar_alerta_temperatura();
-DROP FUNCTION IF EXISTS generar_alerta_viento();
-DROP FUNCTION IF EXISTS generar_alerta_precipitacion();
-
 --- Escenarios de análisis / (Funciones - Triggers - Consultas - Subconsultas)
 
 --- Alertas 
