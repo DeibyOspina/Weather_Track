@@ -109,7 +109,7 @@ WITH alertas_temperatura AS (
         'Alta temperatura detectada: ' || temperatura || '°C',
         CURRENT_DATE
     FROM informacion_sensores
-    WHERE temperatura > 35
+    WHERE temperatura > 28
     AND NOT EXISTS (
         SELECT 1 
         FROM alertas 
@@ -125,7 +125,7 @@ alertas_viento AS (
         'Viento fuerte detectado: ' || velocidad_viento || ' km/h',
         CURRENT_DATE
     FROM informacion_sensores
-    WHERE velocidad_viento > 50
+    WHERE velocidad_viento > 35
     AND NOT EXISTS (
         SELECT 1 
         FROM alertas 
@@ -141,7 +141,7 @@ alertas_precipitacion AS (
         'Alta precipitación detectada: ' || precipitacion || ' mm',
         CURRENT_DATE
     FROM informacion_sensores
-    WHERE precipitacion > 100
+    WHERE precipitacion > 45
     AND NOT EXISTS (
         SELECT 1 
         FROM alertas 
@@ -336,14 +336,14 @@ RETURNS TABLE(
 BEGIN
     RETURN QUERY
     SELECT 
-        c.nombre_ciudad AS ciudad,
+        c.nombre_ciudad,
         EXTRACT(MONTH FROM i.tiempo_lectura)::INT AS mes,
         EXTRACT(YEAR FROM i.tiempo_lectura)::INT AS anio,
         AVG(i.precipitacion)::NUMERIC AS promedio_precipitacion
     FROM informacion_sensores i
     JOIN sensores s ON i.sensor_id = s.sensor_id
     JOIN ciudades c ON s.ciudad_id = c.ciudad_id
-    WHERE i.precipitacion IS NOT NULL 
+    WHERE i.precipitacion IS NOT NULL
     GROUP BY c.nombre_ciudad, anio, mes
     ORDER BY c.nombre_ciudad, anio, mes;
 END;
@@ -359,7 +359,7 @@ SELECT tipo_sensor, COUNT(*) as total_alertas
 FROM alertas
 JOIN sensores ON alertas.sensor_id = sensores.sensor_id
 JOIN tipo_sensores ON sensores.tipo_sensor_id = tipo_sensores.tipo_sensor_id
-GROUP BY tipo_sensor
+GROUP BY tipo_sensor;
 
 --- Alertas por ciudad 
 
@@ -372,14 +372,13 @@ GROUP BY c.nombre_ciudad;
 --- Alertas por tipo de sensor
 
 SELECT 
-    CASE
-        WHEN mensaje_alerta LIKE '%temperatura%' THEN 'Temperatura'
-        WHEN mensaje_alerta LIKE '%viento%' THEN 'Viento'
-        WHEN mensaje_alerta LIKE '%precipitación%' THEN 'Precipitación'
-    END AS tipo_alerta,
-    COUNT(*) AS cantidad_alertas
-FROM alertas
-GROUP BY tipo_alerta;
+    ts.tipo_sensor, 
+    COUNT(a.alerta_id) AS total_alertas
+FROM alertas a
+JOIN sensores s ON a.sensor_id = s.sensor_id
+JOIN sensor_tipo_sensor sts ON s.sensor_id = sts.sensor_id
+JOIN tipo_sensores ts ON sts.tipo_sensor_id = ts.tipo_sensor_id
+GROUP BY ts.tipo_sensor;
 
 --- Distribucion total de alertas por ciudad 
 
@@ -389,86 +388,50 @@ JOIN sensores s ON a.sensor_id = s.sensor_id
 JOIN ciudades c ON s.ciudad_id = c.ciudad_id
 GROUP BY c.nombre_ciudad;
 
+--- Promedio climatico anual
 
-
-
-
--- Opciones para los escenarios del proyecto realizados de otra manera:
-
--- 1. Tendencia de temperatura promedio anual:
-
-SELECT EXTRACT(YEAR FROM tiempo_lectura) AS año, AVG(temperatura) AS temp_promedio,
-       STDDEV(temperatura) AS desviacion_estandar
-FROM informacion_sensores
-GROUP BY año
-ORDER BY año;
-
--- 2. Alertas de alta temperatura en una ciudad específica:
-
-
-SELECT c.nombre_ciudad, COUNT(*) AS total_alertas_altas
-FROM alertas a
-JOIN sensores s ON a.sensor_id = s.sensor_id
-JOIN ciudades c ON s.ciudad_id = c.ciudad_id
-WHERE a.mensaje_alerta LIKE '%alta temperatura%' AND c.nombre_ciudad = 'Ciudad Ejemplo'
-GROUP BY c.nombre_ciudad;
-
--- 3. Ciudades con la mayor precipitación promedio anual:
-
-SELECT c.nombre_ciudad, AVG(i.precipitacion) AS precipitacion_promedio
-FROM ciudades c
-JOIN sensores s ON c.ciudad_id = s.ciudad_id
-JOIN informacion_sensores i ON s.sensor_id = i.sensor_id
-GROUP BY c.nombre_ciudad
-ORDER BY precipitacion_promedio DESC
-LIMIT 10;
-
-
--- 4. Evolución de la dirección del viento en una ciudad específica:
-
-
-SELECT tiempo_lectura, direccion_viento
-FROM informacion_sensores i_s
-INNER JOIN ciudades c ON i_s.info_sensor_id = c.ciudad_id
-WHERE ciudad_id = (SELECT ciudad_id FROM ciudades WHERE nombre_ciudad = 'Ciudad Ejemplo')
-ORDER BY tiempo_lectura;
-
-
--- 5. Alertas generadas por cada tipo de sensor:
-
-CREATE OR REPLACE FUNCTION obtener_alertas_por_tipo_sensor()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION promedio_anual_climatico()
+RETURNS TABLE(
+    ciudad VARCHAR(100),
+    anio INT,
+    promedio_precipitacion NUMERIC,
+    promedio_temperatura NUMERIC,
+    promedio_velocidad_viento NUMERIC
+) AS $$
 BEGIN
-  
-  UPDATE tipo_sensores ts
-  SET total_alertas = (SELECT COUNT(*) 
-                       FROM alertas a
-                       JOIN sensores s ON a.sensor_id = s.sensor_id
-                       WHERE s.tipo_sensor_id = ts.tipo_sensor_id);
-
-  RETURN NEW;
+    RETURN QUERY
+    SELECT 
+        DISTINCT ON (c.nombre_ciudad, EXTRACT(YEAR FROM i.tiempo_lectura)::INT)
+        c.nombre_ciudad AS ciudad,
+        EXTRACT(YEAR FROM i.tiempo_lectura)::INT AS anio,
+        AVG(i.precipitacion)::NUMERIC AS promedio_precipitacion,
+        AVG(i.temperatura)::NUMERIC AS promedio_temperatura,
+        AVG(i.velocidad_viento)::NUMERIC AS promedio_velocidad_viento
+    FROM informacion_sensores i
+    JOIN sensores s ON i.sensor_id = s.sensor_id
+    JOIN ciudades c ON s.ciudad_id = c.ciudad_id
+    WHERE i.tiempo_lectura IS NOT NULL
+    GROUP BY c.nombre_ciudad, EXTRACT(YEAR FROM i.tiempo_lectura)
+    ORDER BY c.nombre_ciudad, anio;
 END;
 $$ LANGUAGE plpgsql;
 
-
-CREATE TRIGGER actualizar_estadisticas_alertas
-AFTER INSERT ON alertas
-FOR EACH ROW
-EXECUTE PROCEDURE obtener_alertas_por_tipo_sensor();
+	--- Visualizacion
+SELECT * FROM promedio_anual_climatico();
 
 
--- 6. Días con viento más fuerte en cada mes:
+--- Cantidad sensores por tipo 
 
-WITH maximos_vientos AS (
-    SELECT ciudad_id, EXTRACT(MONTH FROM tiempo_lectura) AS mes, MAX(velocidad_viento) AS max_viento
-    FROM informacion_sensores i_s
-	INNER JOIN ciudades c ON i_s.info_sensor_id = c.ciudad_id
-    GROUP BY ciudad_id, mes
-)
-SELECT c.nombre_ciudad, m.mes, m.max_viento
-FROM maximos_vientos m
-INNER JOIN ciudades c ON m.ciudad_id = c.ciudad_id;
-
-
-
-
+SELECT 
+    ts.tipo_sensor AS tipo_sensor,
+    COUNT(sts.sensor_id) AS cantidad_sensores
+FROM 
+    tipo_sensores ts
+LEFT JOIN 
+    sensor_tipo_sensor sts 
+ON 
+    ts.tipo_sensor_id = sts.tipo_sensor_id
+GROUP BY 
+    ts.tipo_sensor
+ORDER BY 
+    cantidad_sensores DESC;
